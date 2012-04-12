@@ -34,51 +34,70 @@ func FetchImages(num_iid string) (imgs []*Image, err error) {
 	return fetch(num_iid, false)
 }
 
+func DecodeImage(imgu string) (img *Image, err error) {
+	r3, err := http.Get(imgu)
+	defer close(r3)
+	if err != nil {
+		log.Printf("taobaoimg: get taobao img url %s error: %s\n", imgu, err)
+		return
+	}
+	config, format, err := image.DecodeConfig(r3.Body)
+	if err != nil {
+		log.Printf("taobaoimg: decode image %s error: %s\n", imgu, err)
+		return
+	}
+	img = &Image{}
+	img.URL = imgu
+	img.Format = format
+	img.Width = config.Width
+	img.Height = config.Height
+	return
+}
+
 func fetch(num_iid string, dimension bool) (imgs []*Image, err error) {
 	s := integrationtest.NewSession()
 	// r, err := http.Get(fmt.Sprintf("http://item.taobao.com/item.htm?id=%s", num_iid))
-	r, err := s.Get(fmt.Sprintf("http://item.taobao.com/item.htm?id=%s", num_iid))
+	r1, err := s.Get(fmt.Sprintf("http://item.taobao.com/item.htm?id=%s", num_iid))
+	defer close(r1)
+
 	if err != nil {
 		log.Printf("taobaoimg: get taobao item page error: %s\n", err)
 		return
 	}
 
 	buf := bytes.NewBuffer([]byte{})
-	matchIndex := descUrlRegexp.FindReaderIndex(bufio.NewReader(io.TeeReader(r.Body, buf)))
+	matchIndex := descUrlRegexp.FindReaderIndex(bufio.NewReader(io.TeeReader(r1.Body, buf)))
 	if len(matchIndex) == 0 {
 		return
 	}
 	descURL := buf.String()[matchIndex[0]:matchIndex[1]]
-	r, err = http.Get(descURL)
+	r2, err := http.Get(descURL)
 	if err != nil {
 		log.Printf("taobaoimg: get taobao desc url %s error: %s\n", descURL, err)
 		return
 	}
-	b, _ := ioutil.ReadAll(r.Body)
+	b, _ := ioutil.ReadAll(r2.Body)
+	defer close(r2)
 	matches := imgTagRegexp.FindAllStringSubmatch(string(b), -1)
 	for _, match := range matches {
-		img := &Image{
-			URL: match[1],
-		}
-
+		var img *Image
 		if dimension {
-			r, err = http.Get(match[1])
-			if err != nil {
-				log.Printf("taobaoimg: get taobao img url %s error: %s\n", match[1], err)
-				continue
+			img, err = DecodeImage(match[1])
+		} else {
+			img = &Image{
+				URL: match[1],
 			}
-			config, format, err := image.DecodeConfig(r.Body)
-			if err != nil {
-				log.Printf("taobaoimg: decode image %s error: %s\n", match[1], err)
-				continue
-			}
-			img.Format = format
-			img.Width = config.Width
-			img.Height = config.Height
 		}
-
-		imgs = append(imgs, img)
+		if img != nil {
+			imgs = append(imgs, img)
+		}
 	}
 
 	return
+}
+
+func close(r *http.Response) {
+	if r != nil && r.Body != nil {
+		r.Body.Close()
+	}
 }
