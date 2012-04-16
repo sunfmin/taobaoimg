@@ -15,6 +15,8 @@ import (
 	"regexp"
 )
 
+var Verbose bool
+
 type Image struct {
 	URL    string
 	Format string
@@ -38,12 +40,16 @@ func DecodeImage(imgu string) (img *Image, err error) {
 	r3, err := http.Get(imgu)
 	defer close(r3)
 	if err != nil {
-		log.Printf("taobaoimg: get taobao img url %s error: %s\n", imgu, err)
+		if Verbose {
+			log.Printf("taobaoimg: get taobao img url %s error: %s\n", imgu, err)
+		}
 		return
 	}
 	config, format, err := image.DecodeConfig(r3.Body)
 	if err != nil {
-		log.Printf("taobaoimg: decode image %s error: %s\n", imgu, err)
+		if Verbose {
+			log.Printf("taobaoimg: decode image %s error: %s\n", imgu, err)
+		}
 		return
 	}
 	img = &Image{}
@@ -61,7 +67,9 @@ func fetch(num_iid string, dimension bool) (imgs []*Image, err error) {
 	defer close(r1)
 
 	if err != nil {
-		log.Printf("taobaoimg: get taobao item page error: %s\n", err)
+		if Verbose {
+			log.Printf("taobaoimg: get taobao item page error: %s\n", err)
+		}
 		return
 	}
 
@@ -73,7 +81,9 @@ func fetch(num_iid string, dimension bool) (imgs []*Image, err error) {
 	descURL := buf.String()[matchIndex[0]:matchIndex[1]]
 	r2, err := http.Get(descURL)
 	if err != nil {
-		log.Printf("taobaoimg: get taobao desc url %s error: %s\n", descURL, err)
+		if Verbose {
+			log.Printf("taobaoimg: get taobao desc url %s error: %s\n", descURL, err)
+		}
 		return
 	}
 	b, _ := ioutil.ReadAll(r2.Body)
